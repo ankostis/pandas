@@ -278,8 +278,8 @@ def read_hdf(path_or_buf, key=None, **kwargs):
 
         Parameters
         ----------
-        path_or_buf : path (string), buffer, or path object (pathlib.Path or
-            py._path.local.LocalPath) to read from
+        path_or_buf : path (string), buffer, or path object (pathlib.Path,
+            py._path.local.LocalPath or :class:`tables.Node`) to read from
 
             .. versionadded:: 0.19.0 support for pathlib, py.path.
 
@@ -300,6 +300,7 @@ def read_hdf(path_or_buf, key=None, **kwargs):
         The selected object
 
         """
+    import tables
 
     if kwargs.get('mode', 'a') not in ['r', 'r+', 'a']:
         raise ValueError('mode {0} is not allowed while performing a read. '
@@ -330,6 +331,19 @@ def read_hdf(path_or_buf, key=None, **kwargs):
 
     elif isinstance(path_or_buf, HDFStore):
         if not path_or_buf.is_open:
+            raise IOError('The HDFStore must be open for reading.')
+
+        store = path_or_buf
+        auto_close = False
+
+    elif isinstance(path_or_buf, tables.group.Group):
+        key = path_or_buf._v_pathname
+        try:
+            store = path_or_buf._v_file._hstore
+        except AttributeError:
+            raise ValueError('H5-group(%s) not oppened with pandas.' % key)
+
+        if not store.is_open:
             raise IOError('The HDFStore must be open for reading.')
 
         store = path_or_buf
@@ -616,6 +630,10 @@ class HDFStore(StringMixin):
             if self._mode == 'r' and 'Unable to open/create file' in str(e):
                 raise IOError(str(e))
             raise
+
+        ## Store me onPyTable File to retrive me from Groups.
+        self._handle._hstore = self
+
 
     def close(self):
         """
